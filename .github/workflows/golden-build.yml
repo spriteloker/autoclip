@@ -5,7 +5,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
   issues: write
 
 jobs:
@@ -23,10 +23,7 @@ jobs:
           git config user.email github-actions@users.noreply.github.com
           git add -A
           git commit -m "feat: golden opening desktop candidate"
-  build:
-    needs: prepare
-    uses: ./.github/workflows/desktop-build.yml
-    with:
-      build_macos: false
-      build_windows: true
-    secrets: inherit
+      - name: Dispatch official Windows desktop build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run desktop-build.yml --ref "$GITHUB_REF" -f build_macos=false -f build_windows=true

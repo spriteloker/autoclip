@@ -17,8 +17,11 @@ jobs:
           ref: main
       - name: Apply reviewed source and set internal version
         run: |
-          git apply --whitespace=fix golden-open.patch
-          python scripts/bump_version.py 1.5.8
+          cp golden-open.patch /tmp/golden-open.patch
+          git remote add upstream https://github.com/zhouxiaoka/autoclip.git
+          git fetch upstream main
+          git reset --hard upstream/main
+          git apply --whitespace=fix /tmp/golden-open.patch
           git config user.name github-actions
           git config user.email github-actions@users.noreply.github.com
           git add -A

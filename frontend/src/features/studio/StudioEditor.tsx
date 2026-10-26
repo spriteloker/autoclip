@@ -11,10 +11,12 @@ import { CropPoint, Draft, Scene, SubtitleCue, languages, draftDuration, draftEr
 import CandidatePicker from './CandidatePicker'
 import TitleArtwork from './TitleArtwork'
 import DraftVariantDialog from './DraftVariantDialog'
+import GoldenOpeningDialog from './GoldenOpeningDialog'
 import { titlePresets, isArtworkStyle } from './titlePresets'
 import DraftSettingsPanel, { type FramingState } from './DraftSettingsPanel'
 import { draftExportState } from './draftExportState'
 import './studio.css'
+import { goldenSourceAt, goldenTimelineOffset } from './goldenPreview'
 
 export default function StudioEditor() {
   const { id, draftId } = useParams()
@@ -34,6 +36,7 @@ function Editor({ projectId, draftId }: { projectId: string; draftId: string }) 
   const [picker, setPicker] = useState<number | 'append' | null>(null)
   const [sourceDuration, setSourceDuration] = useState<number>()
   const [showVariant, setShowVariant] = useState(false)
+  const [showGolden, setShowGolden] = useState(false)
   const [showExport, setShowExport] = useState(false)
   const [showRendered, setShowRendered] = useState(false)
   const [playbackError, setPlaybackError] = useState(false)
@@ -117,14 +120,28 @@ function Editor({ projectId, draftId }: { projectId: string; draftId: string }) 
   const [suggestion, setSuggestion] = useState<Draft | null>(null)
   const [undo, setUndo] = useState<Draft | null>(null)
   const video = useRef<HTMLVideoElement>(null)
+  const goldenIndex = useRef(0)
   const localKey = `autoclip.studio.${projectId}.${draftId}`
   const dirty = !!draft && JSON.stringify(draft) !== saved
   const artworkStyle = isArtworkStyle(draft?.title_style)
   const scene = draft?.scenes[selected] || draft?.scenes[0]
-  // The preview transport runs on the clip's own timeline: 0 = scene start (or rendered clip start).
-  const playBase = showRendered ? 0 : scene?.start ?? 0
-  const playLength = showRendered ? renderedDuration : scene ? scene.end - scene.start : 0
-  const togglePlay = () => { const v = video.current; if (!v) return; if (v.paused) void v.play().catch(() => undefined); else v.pause() }
+  const goldenPlayback = !!draft && draft.origin === 'golden-open' && selected === 0 && !showRendered
+  const displayScene = goldenPlayback ? draft.scenes[goldenIndex.current] || scene : scene
+  // Golden drafts use one joined timeline; other drafts preview the selected source scene.
+  const playBase = showRendered || goldenPlayback ? 0 : scene?.start ?? 0
+  const playLength = showRendered ? renderedDuration : goldenPlayback ? draftDuration(draft) : scene ? scene.end - scene.start : 0
+  const playOffset = goldenPlayback ? goldenTimelineOffset(draft.scenes, currentTime) : Math.max(0, Math.min(currentTime - playBase, playLength))
+  const togglePlay = () => {
+    const v = video.current
+    if (!v) return
+    if (v.paused) {
+      if (goldenPlayback) {
+        const last = draft.scenes[draft.scenes.length - 1]
+        if (last && v.currentTime >= last.end - .05) { goldenIndex.current = 0; v.currentTime = draft.scenes[0].start }
+      }
+      void v.play().catch(() => undefined)
+    } else v.pause()
+  }
   const jobs = workspace.jobs.filter(j => j.draft_id === draftId)
   const exportState = draft ? draftExportState(draft, jobs) : undefined
   const currentJob = !dirty ? exportState?.completed || exportState?.failure : undefined
@@ -150,6 +167,7 @@ function Editor({ projectId, draftId }: { projectId: string; draftId: string }) 
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [draft, dirty])
+  useEffect(() => { goldenIndex.current = 0 }, [selected, draftId])
   useEffect(() => {
     if (video.current && scene && !showRendered) video.current.currentTime = scene.start
   }, [scene?.id, scene?.start, showRendered])
@@ -185,7 +203,7 @@ function Editor({ projectId, draftId }: { projectId: string; draftId: string }) 
   const updateScene = (i: number, update: Partial<Scene>) => patch({ scenes: draft.scenes.map((s, index) => index === i ? {...s,...update} : s) })
   return <div className="ac-page studio-editor-page">
     <button className="ac-back" onClick={() => navigate(`/project/${projectId}`)}>{t("‹ 返回项目")}</button>
-    <header className="studio-row studio-editor-head"><div><h1 className="ac-title">{draft.title}</h1><span className="studio-muted">{dirty ? t("有修改未保存 · 本机暂存") : t("草稿已保存")} · V{draft.revision} · {fmtDuration(draftDuration(draft))}</span></div><div className="studio-actions"><Btn disabled={!!busy} onClick={() => setShowVariant(true)}>{t("另存为新版本")}</Btn><Btn disabled={!!busy || !dirty} loading={busy==='save'} onClick={() => perform('save', async () => {await save()})}>{t("保存草稿")}</Btn><Btn variant="cta" disabled={!!busy} onClick={() => setShowExport(true)}>{t("导出成片")}</Btn></div></header>
+    <header className="studio-row studio-editor-head"><div><h1 className="ac-title">{draft.title}</h1><span className="studio-muted">{dirty ? t("有修改未保存 · 本机暂存") : t("草稿已保存")} · V{draft.revision} · {fmtDuration(draftDuration(draft))}</span></div><div className="studio-actions"><Btn disabled={!!busy} onClick={() => setShowGolden(true)}>{t("黄金三秒")}</Btn><Btn disabled={!!busy} onClick={() => setShowVariant(true)}>{t("另存为新版本")}</Btn><Btn disabled={!!busy || !dirty} loading={busy==='save'} onClick={() => perform('save', async () => {await save()})}>{t("保存草稿")}</Btn><Btn variant="cta" disabled={!!busy} onClick={() => setShowExport(true)}>{t("导出成片")}</Btn></div></header>
     {loadError && <p className="studio-error">{t("任务状态暂时无法更新：")}{t(loadError)}</p>}
     {!showRendered && (sourcePreview.status !== 'completed' || playbackError) && <details open={playbackError || ['queued', 'running', 'failed'].includes(sourcePreview.status)} className="studio-muted">
       <summary>{t('生成兼容预览')}</summary>
@@ -196,15 +214,45 @@ function Editor({ projectId, draftId }: { projectId: string; draftId: string }) 
     <fieldset disabled={!!busy} className="studio-fieldset">
       <div className="studio-editor-grid"><section className="studio-editor-main"><div className="studio-editor-sticky"><div className={`studio-stage studio-stage--${draft.aspect}`}>
         <div className="studio-video-frame" style={{aspectRatio: draft.aspect==='portrait'?'9/16':draft.aspect==='landscape'?'16/9':undefined}}>
-          <video ref={video} preload="metadata" playsInline muted={muted} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onError={() => setPlaybackError(true)} onLoadedData={() => setPlaybackError(false)} src={showRendered && previewUrl ? previewUrl : sourcePreview.status === 'completed' && sourcePreview.version ? studioApi.compatibleSource(projectId, sourcePreview.version) : studioApi.source(projectId)} style={{objectFit: showRendered || draft.layout!=='crop' || frameModeAt(scene, currentTime)==='fit'?'contain':'cover', objectPosition:`${cropAt(scene, currentTime, draft.crop_x ?? .5)*100}% 50%`}} onClick={togglePlay} onLoadedMetadata={() => { const v = video.current; if (!v) return; if (showRendered) setRenderedDuration(v.duration); else if (scene) { setSourceDuration(v.duration); v.currentTime = scene.start } }} onTimeUpdate={() => {const v=video.current; if(!v) return; setCurrentTime(v.currentTime); if(scene && !showRendered && (v.currentTime>=scene.end || v.currentTime<scene.start-.25)) {if(v.currentTime>=scene.end) v.pause(); v.currentTime=scene.start}}} />
+          <video ref={video} preload="metadata" playsInline muted={muted} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onError={() => setPlaybackError(true)} onLoadedData={() => setPlaybackError(false)} src={showRendered && previewUrl ? previewUrl : sourcePreview.status === 'completed' && sourcePreview.version ? studioApi.compatibleSource(projectId, sourcePreview.version) : studioApi.source(projectId)} style={{objectFit: showRendered || draft.layout!=='crop' || frameModeAt(displayScene, currentTime)==='fit'?'contain':'cover', objectPosition:`${cropAt(displayScene, currentTime, draft.crop_x ?? .5)*100}% 50%`}} onClick={togglePlay} onLoadedMetadata={() => { const v = video.current; if (!v) return; if (showRendered) setRenderedDuration(v.duration); else if (scene) { goldenIndex.current = 0; setSourceDuration(v.duration); v.currentTime = scene.start } }} onTimeUpdate={() => {
+            const v = video.current
+            if (!v) return
+            setCurrentTime(v.currentTime)
+            if (goldenPlayback) {
+              const index = Math.min(goldenIndex.current, draft.scenes.length - 1)
+              const active = draft.scenes[index]
+              if (active && v.currentTime >= active.end) {
+                if (index + 1 >= draft.scenes.length) { v.pause(); v.currentTime = active.end; return }
+                goldenIndex.current = index + 1
+                v.currentTime = draft.scenes[index + 1].start
+                void v.play().catch(() => undefined)
+                return
+              }
+              if (active && v.currentTime < active.start - .25) v.currentTime = active.start
+              return
+            }
+            if (scene && !showRendered && (v.currentTime >= scene.end || v.currentTime < scene.start - .25)) {
+              if (v.currentTime >= scene.end) v.pause()
+              v.currentTime = scene.start
+            }
+          }} />
           {!showRendered && draft.subtitles && activeCue && <div className={`studio-caption-overlay studio-caption studio-caption--${draft.subtitle_style || 'clean'}`}>{activeCue.text}</div>}
           {!showRendered && selected===0 && draft.hook && !artworkStyle && <div className={`studio-hook studio-hook--${draft.title_style || 'plain'}`}>{draft.hook}</div>}
           {!showRendered && selected===0 && draft.hook && artworkStyle && <TitleArtwork projectId={projectId} draft={draft}/>}
         </div>
-        <PlayerBar offset={Math.max(0, Math.min(currentTime - playBase, playLength))} length={playLength} playing={playing} muted={muted}
+        <PlayerBar offset={playOffset} length={playLength} playing={playing} muted={muted}
           onToggle={togglePlay} onMute={() => setMuted(m => !m)}
-          onSeek={offset => { const v = video.current; if (!v) return; v.currentTime = playBase + offset; setCurrentTime(v.currentTime) }} />
-      </div><div className="studio-row studio-preview-foot"><span className="studio-muted">{showRendered?t("实际渲染结果"):t("原片预览 · 成片取 {{range}} · 字幕、翻译以渲染结果为准", { range: scene ? `${fmtDuration(scene.start)}–${fmtDuration(scene.end)}` : "" })}</span>{previewUrl ? <Btn size="sm" onClick={() => setShowRendered(!showRendered)}>{showRendered?t("查看原片"):t("播放成片")}</Btn> : <Btn size="sm" disabled={!!active} onClick={render}>{active?t("正在渲染"):t("渲染预览")}</Btn>}</div></div>
+          onSeek={offset => {
+            const v = video.current
+            if (!v) return
+            if (goldenPlayback) {
+              const target = goldenSourceAt(draft.scenes, offset)
+              goldenIndex.current = target.index
+              v.currentTime = target.time
+            } else v.currentTime = playBase + offset
+            setCurrentTime(v.currentTime)
+          }} />
+      </div><div className="studio-row studio-preview-foot"><span className="studio-muted">{showRendered ? t("实际渲染结果") : goldenPlayback ? t("拼接预览 · 黄金片头＋正文 · 字幕、翻译以渲染结果为准") : t("原片预览 · 成片取 {{range}} · 字幕、翻译以渲染结果为准", { range: scene ? `${fmtDuration(scene.start)}–${fmtDuration(scene.end)}` : "" })}</span>{previewUrl ? <Btn size="sm" onClick={() => setShowRendered(!showRendered)}>{showRendered?t("查看原片"):t("播放成片")}</Btn> : <Btn size="sm" disabled={!!active} onClick={render}>{active?t("正在渲染"):t("渲染预览")}</Btn>}</div></div>
       <div className="studio-prompt"><input aria-label={t("文案修改要求")} placeholder={t("告诉 AI 怎么改文案，例如：开头改成一个简短的问题")} value={instruction} onChange={e=>setInstruction(e.target.value)} /><Btn variant="cta" loading={busy==='rewrite'} disabled={!instruction.trim()} onClick={rewrite}>{t("改一版文案")}</Btn></div>
       {undo && <Btn variant="text" onClick={()=>{setDraft({...undo, revision:draft.revision});setUndo(null);setShowRendered(false)}}>{t("撤销上次修改")}</Btn>}
       <details className="studio-details studio-source-details"><summary>{t("调整镜头")}{' '}<span className="ac-mono">{draft.scenes.length}</span>{' '}{t("· 顺序与起止点")}</summary>
@@ -227,6 +275,10 @@ function Editor({ projectId, draftId }: { projectId: string; draftId: string }) 
         setUndo(draft); patch({ scenes: next.scenes }); setSelected(picker === 'append' ? draft.scenes.length : picker)
         setPicker(null); setNotice("镜头已更新，请保存后重新渲染。换镜头后请核对开头文案是否仍符合画面。")
       } catch(e) { setPicker(null); setError(t(errorText(e))) }
+    }} />}
+    {showGolden && <GoldenOpeningDialog projectId={projectId} draft={draft} onClose={() => setShowGolden(false)} onCreated={created => {
+      try { localStorage.removeItem(localKey) } catch { /* The derived draft is already durable. */ }
+      navigate(`/project/${projectId}/studio/${created.id}`)
     }} />}
     <DraftVariantDialog open={showVariant} projectId={projectId} draft={draft} onClose={() => setShowVariant(false)} onCreated={created => {
       try { localStorage.removeItem(localKey) } catch { /* The new server draft is already durable. */ }

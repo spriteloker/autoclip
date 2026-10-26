@@ -14,6 +14,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from backend.services.studio.chinese import simplified_chinese
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,7 +46,7 @@ TAG_CHARS = 20
 PROMPT = (
     '你是短视频运营编辑。根据这段视频的字幕 lines 与参考标题 title_hint，为 platforms 里的每个平台写发布文案。'
     'rules 给出每个平台的语言、标题字数上限、描述字数上限、话题数量与风格。'
-    '要求：忠于原文，不编造事实和数据，不夸大；标题与描述用该平台要求的语言；tags 是不带 # 的话题词，具体到人物、领域或观点，'
+    '要求：忠于原文，不编造事实和数据，不夸大；标题与描述用该平台要求的语言；中文只能是简体中文，不得使用繁体字；tags 是不带 # 的话题词，具体到人物、领域或观点，'
     '不要「干货」「必看」这类泛词；source 是已知素材出处（节目或频道名）。'
     'source 为空时不写出处、节目名、频道名，不用空括号占位，也不根据人物或话题猜测；'
     '人物身份和经历只用 lines 中明确给出的事实，不根据 title_hint 补充身份。'
@@ -146,7 +148,7 @@ def _unsupported_executive_role(description: str, evidence: str) -> bool:
 
 def fallback(title: str, platform: str) -> dict[str, Any]:
     rules = RULES.get(platform, RULES['original'])
-    text = _clean(title)
+    text = simplified_chinese(_clean(title)) if rules.language == 'zh' else _clean(title)
     if rules.language == 'en' and FOREIGN_FOR_EN.search(text):
         text = ''  # never a Chinese title on an English platform; the user fills it in
     return {'title': _fit(text, rules.title_max), 'description': '', 'tags': []}
@@ -178,6 +180,10 @@ def build_posts(title: str, lines: list[str], platforms: list[str], *, source: s
                 rules = RULES[platform]
                 post_title = _fit(_clean(item.get('title')), rules.title_max)
                 description = _fit(_clean(item.get('description')), rules.description_max)
+                if rules.language == 'zh':
+                    post_title = simplified_chinese(post_title)
+                    description = simplified_chinese(description)
+                    item = {**item, 'tags': [simplified_chinese(tag) for tag in item.get('tags', [])]}
                 if not source and SOURCE_ATTRIBUTION.search(description):
                     # Local uploads have no listing provenance. Keep the useful title,
                     # but never ship a guessed programme or an empty source placeholder.

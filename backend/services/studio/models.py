@@ -186,6 +186,12 @@ class Draft(BaseModel):
             raise ValueError('极简大字需要文字模板版本 2 或更新')
         if self.title_style in ('pixel', 'frosted') and self.title_template_version not in (3, 6):
             raise ValueError('像素与磨砂模板需要文字模板版本 3 或 6')
+        from backend.services.studio.chinese import simplified_chinese
+        self.title = simplified_chinese(self.title)
+        self.hook = simplified_chinese(self.hook)
+        for scene in self.scenes:
+            scene.label = simplified_chinese(scene.label)
+            scene.evidence = simplified_chinese(scene.evidence)
         return self
 
 class CreateDraft(BaseModel):

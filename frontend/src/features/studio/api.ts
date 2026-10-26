@@ -4,7 +4,7 @@ import { observeStudioOperation, studioImportProperties, studioGoals, observeStu
 import { workflow } from '../../analytics/observer'
 import api from '../../services/api'
 import type { ImportReadiness } from './importReadiness'
-import { Draft, Workspace, RenderJob, Language, CandidateList, ImportOptions, Goal, AnalysisMode, AnalysisPreferences, SubtitleCue, FramingStatus, AutoFrameResult, PlatformStrategySummary, OutputVariant, PostCopy } from './types'
+import { Draft, Workspace, RenderJob, Language, CandidateList, ImportOptions, Goal, AnalysisMode, AnalysisPreferences, SubtitleCue, FramingStatus, AutoFrameResult, PlatformStrategySummary, OutputVariant, PostCopy, GoldenOpeningCandidate } from './types'
 export type SourcePreview = { status: 'idle' | 'queued' | 'running' | 'completed' | 'failed'; version?: string; error?: string }
 export function draftProperties(draft?: Partial<Draft>): Properties {
   const packaging = draft?.packaging
@@ -77,6 +77,8 @@ export const studioApi = {
   save: (pid: string, draft: Draft): Promise<Draft> => observeStudioOperation('studio_draft_save', () => api.put(`/studio/${pid}/drafts/${draft.id}`, draft), undefined, { ...workflow.context(pid), ...draftProperties(draft) }),
   duplicate: (pid: string, draft: Draft, title: string, language: Language): Promise<Draft> => observeStudioOperation('studio_draft_duplicate', () => api.post(`/studio/${pid}/drafts/${draft.id}/duplicate`, { draft, title, language }), undefined, { ...workflow.context(pid), ...draftProperties(draft) }),
   rewrite: (pid: string, draft: Draft, instruction: string): Promise<Draft> => observeStudioOperation('studio_rewrite', () => api.post(`/studio/${pid}/rewrite`, { draft, instruction }, { timeout: 310000 }), undefined, { ...workflow.context(pid), ...draftProperties(draft) }),
+  goldenOpeningAnalyze: (pid: string, draft: Draft): Promise<{ candidates: GoldenOpeningCandidate[] }> => observeStudioOperation('studio_golden_opening_analyze', () => api.post(`/studio/${pid}/golden-opening/analyze`, { draft }, { timeout: 310000 }), undefined, { ...workflow.context(pid), ...draftProperties(draft) }),
+  goldenOpeningApply: (pid: string, draft: Draft, candidate: GoldenOpeningCandidate): Promise<Draft> => observeStudioOperation('studio_golden_opening_apply', () => api.post(`/studio/${pid}/golden-opening`, { draft, candidate }), undefined, { ...workflow.context(pid), ...draftProperties(draft) }),
   export: (pid: string, draft: string, revision: number, settings?: Partial<Draft>): Promise<RenderJob> => observeStudioOperation('studio_export', () => api.post(`/studio/${pid}/drafts/${draft}/export`, { revision }), (job: RenderJob, props) => workflow.watch('studio-export', job.job_id, pid, undefined, { ...props, ...workflow.context(pid, job.job_id) }), { ...workflow.context(pid), ...draftProperties(settings) }),
   thumbnail: (pid: string, draft: string, revision: number, job?: string) => `${api.defaults.baseURL}/studio/${pid}/drafts/${draft}/thumbnail?revision=${revision}${job ? `&job_id=${job}` : ''}`,
   video: (pid: string, jid: string, download = false) => `${api.defaults.baseURL}/studio/${pid}/exports/${jid}/video${download ? '?download=true' : ''}`,

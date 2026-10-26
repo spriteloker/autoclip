@@ -12,9 +12,15 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from backend.services.studio.chinese import simplified_payload
 from backend.services.studio.models import Packaging
 
 logger = logging.getLogger(__name__)
+
+
+def _validated_output(payload: dict, audience: str) -> dict:
+    validated = Packaging.model_validate(payload).model_dump()
+    return simplified_payload(validated) if audience == 'zh' else validated
 
 CJK = re.compile(r'[㐀-鿿]')
 KANA = re.compile(r'[぀-ヿ]')
@@ -62,7 +68,7 @@ PROMPT = (
     '{"title_lines":["...","..."],"accent_line":1,"segments":[{"from":0,"to":2,"text":"..."}],'
     '"speakers":[{"line":0,"name":"...","role":"..."}],"tags":[{"line":0,"text":"..."}],'
     '"highlights":[{"line":0,"word":"..."}]}\n'
-    '规则：title_lines 用 audience_language 写 1–2 行，每行不超过 title_limit 个字符，概括最抓人的观点，不编造；'
+    '规则：title_lines 用 audience_language 写 1–2 行，每行不超过 title_limit 个字符，概括最抓人的观点，不编造；中文只能使用简体中文，不得使用繁体字；'
     '两行合起来必须是完整的一句话或两个完整短语，宁短勿长，不要写到一半、不要破折号续半句，不用 markdown 或 HTML 符号；'
     'accent_line 是需要强调的那一行下标（0 或 1）。'
     'segments 把 lines 按完整句子重新分段：from/to 是连续的行 id 区间，按顺序首尾相接、覆盖全部行、不重叠；'
@@ -192,7 +198,7 @@ def build_packaging(draft: dict[str, Any], lines: list[dict[str, Any]], strategy
     fallback = {**base, 'title_lines': fallback_title, 'fallback': True,
                 'cues': [] if not captions or translate else [{'start': l['start'], 'end': l['end'], 'text': l['text'][:600], 'original': ''} for l in lines]}
     if not lines:
-        return Packaging.model_validate(fallback).model_dump()
+        return _validated_output(fallback, audience)
     if call is None:
         from backend.services.studio.intelligence import text_json as call
     payload = {'template': template, 'audience_language': audience, 'translate': translate,
@@ -205,7 +211,7 @@ def build_packaging(draft: dict[str, Any], lines: list[dict[str, Any]], strategy
     for attempt in range(2):
         try:
             result = call(PROMPT, payload)
-            return Packaging.model_validate(_validated(result, lines, base, translate, burned, known_names, draft, avoid_palettes, captions)).model_dump()
+            return _validated_output(_validated(result, lines, base, translate, burned, known_names, draft, avoid_palettes, captions), audience)
         except (ValueError, TypeError) as error:
             logger.warning('Packaging response rejected (attempt %d): %s', attempt + 1, error)
             payload = {**payload, 'previous_error': f'上一次返回不合格：{error}。请严格按规则重新返回。'}
@@ -221,7 +227,7 @@ def build_packaging(draft: dict[str, Any], lines: list[dict[str, Any]], strategy
             # A rejected model response must not turn an English interview into a captionless
             # video. Keep readable source rows and disclose the loss of translation in the UI.
             fallback['cues'] = source_cues(lines, audience)
-    return Packaging.model_validate(fallback).model_dump()
+    return _validated_output(fallback, audience)
 
 
 def source_cues(lines: list[dict[str, Any]], audience: str) -> list[dict[str, Any]]:

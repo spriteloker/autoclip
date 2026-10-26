@@ -36,6 +36,9 @@ export function patchShot(scene: Scene, time: number, changes: Partial<CropPoint
   const index = Math.max(0, shotIndexAt({ ...scene, crop_track: track }, time))
   return { ...scene, crop_track: track.map((p, i) => i === index ? { ...p, ...changes } : p) }
 }
+export interface GoldenOpeningCandidate {
+  id: string; start: number; end: number; text: string; reason: string
+}
 export interface Candidate extends Scene { kind: 'visual' | 'legacy' }
 export interface CandidateList { duration: number; candidates: Candidate[]; warnings: string[] }
 export interface Packaging {

@@ -417,6 +417,43 @@ def retry_output_variant(project_id: str, variant_id: str, db: Session = Depends
     return call(jobs.retry_variant, project_id, variant_id)
 
 
+@router.post('/{project_id}/golden-opening/analyze')
+def analyze_golden_opening(project_id: str, body: dict, db: Session = Depends(get_db)):
+    from backend.services.studio.cold_open import GoldenOpeningAnalyzeRequest, analyze_golden_opening
+    from backend.services.publish_export import _load_srt_entries
+    request = GoldenOpeningAnalyzeRequest.model_validate(body)
+    project_or_404(project_id, db)
+    parent = next((d for d in store.read(project_id)['drafts'] if d['id'] == request.draft.id), None)
+    if parent is None:
+        raise HTTPException(404, '来源草稿不存在')
+    entries = _load_srt_entries(project_id)
+    try:
+        candidates = call(analyze_golden_opening, request.draft, entries, intelligence.text_json)
+    except Exception as error:
+        capture_studio_exception(error, 'golden_opening')
+        raise HTTPException(502, '生成黄金三秒候选失败，请检查模型设置后重试；原草稿未改动') from None
+    return {'candidates': [candidate.model_dump() for candidate in candidates]}
+
+
+@router.post('/{project_id}/golden-opening')
+def create_golden_opening(project_id: str, body: dict, db: Session = Depends(get_db)):
+    from backend.services.studio.cold_open import GoldenOpeningApplyRequest, apply_golden_opening
+    from backend.services.publish_export import _load_srt_entries
+    request = GoldenOpeningApplyRequest.model_validate(body)
+    project = project_or_404(project_id, db)
+    parent = next((d for d in store.read(project_id)['drafts'] if d['id'] == request.draft.id), None)
+    if parent is None:
+        raise HTTPException(404, '来源草稿不存在')
+    if request.draft.revision > parent['revision']:
+        raise HTTPException(409, '来源版本无效，请重新加载后再试')
+    candidate = call(apply_golden_opening, request.draft, request.candidate, _load_srt_entries(project_id))
+    call(validate_draft, project_id, candidate)
+    result = call(store.save_draft, project_id, candidate, create=True)
+    project.processing_config = {**(project.processing_config or {}), 'studio_draft_count': len(store.read(project_id)['drafts'])}
+    db.commit()
+    return result
+
+
 @router.post('/{project_id}/drafts')
 def create_draft(project_id: str, body: CreateDraft, db: Session = Depends(get_db)):
     project_or_404(project_id, db)

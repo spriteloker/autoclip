@@ -78,6 +78,8 @@
         "studio_draft_save": { "status": "keep" },
         "studio_draft_duplicate": { "status": "keep" },
         "studio_rewrite": { "status": "keep" },
+        "studio_golden_opening_analyze": { "status": "keep" },
+        "studio_golden_opening_apply": { "status": "keep" },
         "studio_analysis_preferences": { "status": "keep" },
         "vision_provider_test": { "status": "keep" },
         "vision_provider_save": { "status": "keep" },

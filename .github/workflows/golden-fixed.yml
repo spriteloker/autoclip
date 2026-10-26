@@ -30,4 +30,4 @@ jobs:
       - name: Dispatch official Windows desktop build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run desktop-build.yml --ref feat/golden-build -f build_macos=false -f build_windows=true
+        run: gh workflow run desktop-build.yml --repo spriteloker/autoclip --ref feat/golden-build -f build_macos=false -f build_windows=true

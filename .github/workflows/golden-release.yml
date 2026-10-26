@@ -11,11 +11,10 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          run-id: 40375904708
-          artifact-ids: 12679077116
-          path: new
+      - name: Download Windows installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run download 40375904708 -n autoclip-desktop-windows-x64 -D new
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.5.8-golden.1

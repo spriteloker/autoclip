@@ -39,6 +39,7 @@ dependencies = [
   "openai==3.8.0",
   "google-genai==2.22.0",
   "dashscope==1.27.4",
+  "opencc-python-reimplemented==0.1.7",
   "mcp==2.1.1",
   "sentry-sdk==2.69.2",
 ]
@@ -53,6 +54,7 @@ Issues = "https://github.com/zhouxiaoka/autoclip/issues"
 
 [tool.setuptools.packages.find]
 include = ["backend", "backend.*"]
+exclude = ["backend.tests", "backend.tests.*"]
 
 [tool.setuptools.package-data]
-backend = ["prompt/*.txt", "prompt/**/*.txt", "assets/fonts/*.ttf", "assets/fonts/*.txt", "assets/fonts/*.json", "assets/models/*.onnx", "assets/models/*-LICENSE.txt", "assets/outro/*.mp4", "core/infistar_models.json", "core/event_catalog.json"]
+backend = ["prompt/*.txt", "prompt/**/*.txt", "assets/fonts/*.ttf", "assets/fonts/*.txt", "assets/fonts/*.json", "assets/models/*.onnx", "assets/models/*-LICENSE.txt", "assets/lexicon/*.txt.gz", "assets/lexicon/*-LICENSE.txt", "assets/outro/*.mp4", "assets/templates/*/*", "core/infistar_models.json", "core/event_catalog.json", "core/failure_messages.json", "presets/*.json"]

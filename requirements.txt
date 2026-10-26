@@ -57,6 +57,7 @@ pytz==2026.3.post1
 openai==3.8.0
 google-genai==2.22.0
 dashscope==1.27.4
+opencc-python-reimplemented==0.1.7
 
 # --- test tooling ---
 # Kept here (rather than a separate dev file) because CI, the Dockerfile and the

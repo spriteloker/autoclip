@@ -22,6 +22,9 @@ venv/
 env/
 .venv/
 venv_*/
+.test-deps/
+.test-bin/
+.tmp/
 
 # 视频和媒体文件
 *.mp4
@@ -79,6 +82,7 @@ data/temp/
 data/output/
 data/backups/
 data/cache/
+data/shutdown_markers/
 backend/data/
 
 # 前端依赖与构建产物

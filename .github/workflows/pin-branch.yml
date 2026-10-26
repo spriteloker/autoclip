@@ -1,0 +1,25 @@
+name: Pin golden build branch
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update build branch through GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/golden-build.yml')
+          text = p.read_text()
+          assert '"$GITHUB_REF"' in text
+          p.write_text(text.replace('"$GITHUB_REF"', 'feat/golden-build'))
+          PY
+          gh api --method PUT repos/${{ github.repository }}/contents/.github/workflows/golden-build.yml             -f message="build: pin desktop build to golden branch"             -f branch=main             -f content="$(base64 -w0 .github/workflows/golden-build.yml)"

@@ -11,6 +11,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Download Windows installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,32 @@
+name: Golden Opening Desktop Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+  issues: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/golden-build
+      - name: Apply reviewed source and set internal version
+        run: |
+          git apply --whitespace=fix golden-open.patch
+          python scripts/bump_version.py 1.5.8
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add -A
+          git commit -m "feat: golden opening desktop candidate"
+  build:
+    needs: prepare
+    uses: ./.github/workflows/desktop-build.yml
+    with:
+      build_macos: false
+      build_windows: true
+    secrets: inherit

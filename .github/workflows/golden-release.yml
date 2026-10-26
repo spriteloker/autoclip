@@ -15,7 +15,7 @@ jobs:
       - name: Download Windows installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh run download 40419821904 -n autoclip-desktop-windows-x64 -D new
+        run: gh run download 40421795768 -n autoclip-desktop-windows-x64 -D new
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.5.8-golden.4

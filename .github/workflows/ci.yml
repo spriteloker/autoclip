@@ -49,8 +49,14 @@ jobs:
 
       - name: Install video test runtime
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-cjk
+          mkdir -p /tmp/ffmpeg-static
+          curl -L --fail --retry 5 --connect-timeout 20 -o /tmp/ffmpeg.tar.xz https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz
+          python -c "import tarfile; tarfile.open('/tmp/ffmpeg.tar.xz').extractall('/tmp/ffmpeg-static')"
+          echo "/tmp/ffmpeg-static/ffmpeg-master-latest-linux64-gpl/bin" >> "$GITHUB_PATH"
+          export PATH="/tmp/ffmpeg-static/ffmpeg-master-latest-linux64-gpl/bin:$PATH"
+          sudo mkdir -p /usr/share/fonts/opentype/noto
+          sudo curl -L --fail --retry 5 --connect-timeout 20 -o /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTC/NotoSansCJK-Regular.ttc
+          fc-cache -f
           ffmpeg -version
           ffprobe -version
 

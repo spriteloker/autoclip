@@ -43,7 +43,8 @@ class Scene(BaseModel):
 
 class PackagingCue(BaseModel):
     """One caption line in source seconds: text in the audience language, plus the original."""
-    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    # Packages created by older desktop builds may carry per-cue editorial fields.
+    model_config = ConfigDict(extra='allow', allow_inf_nan=False)
     start: float = Field(ge=0)
     end: float = Field(gt=0)
     text: str = Field(min_length=1, max_length=600)
@@ -97,7 +98,8 @@ class Packaging(BaseModel):
     Version 2 adds the HTML templates and the optional editorial/street fields. A version 1
     payload that carries those fields is rejected, so old projects do not silently change shape.
     """
-    model_config = ConfigDict(extra='forbid')
+    # Keep older saved package metadata readable instead of rejecting existing projects.
+    model_config = ConfigDict(extra='allow')
     version: Literal[1, 2] = 1
     template: str
     audience_language: Literal['zh', 'en']

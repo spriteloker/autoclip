@@ -1,5 +1,6 @@
 from backend.services.studio.cold_open import (
-    GoldenOpeningCandidate, analyze_golden_opening, apply_golden_opening, candidate_windows,
+    GoldenOpeningAnalyzeRequest, GoldenOpeningCandidate, analyze_golden_opening, apply_golden_opening,
+    candidate_windows,
 )
 from backend.services.studio.chinese import simplified_chinese
 from backend.services.studio.models import Draft, Scene
@@ -171,3 +172,22 @@ def test_golden_opening_routes_read_json_body_not_query_parameters(monkeypatch):
         response = client.post(f'/studio/project{suffix}', json=body)
         assert response.status_code == 404
         assert response.json()['detail'] == '项目不存在'
+
+
+def test_golden_opening_accepts_package_metadata_saved_by_older_builds():
+    packaging = {
+        'version': 1,
+        'template': 'interview_zh',
+        'audience_language': 'zh',
+        'captions_enabled': True,
+        'deck': 'legacy deck',
+        'issue': 'legacy issue',
+        'cues': [{'start': 1, 'end': 3, 'text': '這是完整的一句話。', 'original': '',
+                  'emphasis': '完整', 'speaker': ''}],
+    }
+
+    request = GoldenOpeningAnalyzeRequest.model_validate({'draft': _draft(packaging).model_dump()})
+
+    assert request.draft.packaging is not None
+    assert request.draft.packaging.model_extra['deck'] == 'legacy deck'
+    assert request.draft.packaging.cues[0].model_extra['emphasis'] == '完整'
